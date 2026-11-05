@@ -12,6 +12,7 @@ function configurePassport() {
     throw new Error("GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_CALLBACK_URL are required.");
   }
 
+  // OAuth 2.0: Passport exchanges Google's authorization code for the user's profile.
   passport.use(
     new GoogleStrategy(
       {
@@ -19,6 +20,7 @@ function configurePassport() {
         clientSecret: GOOGLE_CLIENT_SECRET,
         callbackURL: GOOGLE_CALLBACK_URL,
       },
+      // Verify callback: runs after the code exchange succeeds, with the Google profile.
       async (accessToken, refreshToken, profile, done) => {
         try {
           // Find the user by Google ID, creating the record on first sign-in.
@@ -83,8 +85,12 @@ function setupAuth(app, mongoUrl) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Routes are mounted at /auth below, so these become /auth/google and /auth/google/callback.
   const router = express.Router();
+  // Step 1: redirect the user to Google's consent screen.
   router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+  // Step 2: Google redirects back here with an authorization code; Passport exchanges it,
+  // logs the user in (creates the session), then we send them home.
   router.get(
     "/google/callback",
     passport.authenticate("google", { failureRedirect: "/?login=failed" }),
