@@ -14,11 +14,12 @@ In your existing app checkout (find it with `pwd` and `ls`; do not create a seco
 
 ```bash
 git fetch origin
-git switch main
-git pull --ff-only origin main
+git switch -c milestone-c-infrastructure --track origin/milestone-c-infrastructure
 npm ci
 pm2 ls
 ```
+
+If that branch already exists in the VM checkout, use `git switch milestone-c-infrastructure` then `git pull --ff-only origin milestone-c-infrastructure` instead. After your team reviews and merges the draft PR, switch back to `main` and pull it; until then, deploy the branch shown above. Check `git rev-parse --short HEAD` so you know which code is actually live.
 
 First run a second process without interrupting the existing app:
 
