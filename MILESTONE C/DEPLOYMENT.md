@@ -6,20 +6,32 @@ Use the commands below on your Azure Ubuntu VM unless a step says **collector VM
 
 Current path: browser → Nginx (HTTPS) → one Express process → MongoDB. Target path: browser → Nginx (HTTPS) → HAProxy (127.0.0.1:8080) → Express (127.0.0.1:3000 or :3001) → shared MongoDB. The MongoDB session store means a Google login started on one instance can be read by the other.
 
-**Do not commit `.env`, credentials, or screenshots containing them.** Work in a Milestone C branch, then deploy that commit. Ask a teammate to review the config before replacing the live Nginx file.
+**Do not commit `.env`, credentials, or screenshots containing them.** The live VM checkout is `~/Web-adminProject`, and its `main` branch has one local CSS commit that is not on GitHub. Keep it intact. Prepare the Milestone C branch in a separate Git worktree. Ask a teammate to review the config before replacing the live Nginx file.
 
-## 1. Update the VM checkout and prepare two app processes
+## 1. Prepare a separate worktree and two app processes
 
-In your existing app checkout (find it with `pwd` and `ls`; do not create a second production checkout):
+From the existing checkout, fetch the remote and save a local branch name pointing to the current live commit. The old PM2 process continues running from the old directory throughout this step:
 
 ```bash
+cd ~/Web-adminProject
 git fetch origin
-git switch -c milestone-c-infrastructure --track origin/milestone-c-infrastructure
-npm ci
+git branch backup/live-before-milestone-c-20261123
+git worktree add --detach ../linklocker-milestone-c origin/milestone-c-infrastructure
+cd ~/linklocker-milestone-c
+git rev-parse --short HEAD
+test -f ../Web-adminProject/.env && echo 'Production environment file exists'
+df -h .
+```
+
+Only after verifying the production `.env` exists, copy it **on the VM** into the separate worktree and install dependencies there. Never paste `.env` in chat or commit it:
+
+```bash
+cp ../Web-adminProject/.env .env
+npm ci --omit=dev --no-audit --no-fund
 pm2 ls
 ```
 
-If that branch already exists in the VM checkout, use `git switch milestone-c-infrastructure` then `git pull --ff-only origin milestone-c-infrastructure` instead. After your team reviews and merges the draft PR, switch back to `main` and pull it; until then, deploy the branch shown above. Check `git rev-parse --short HEAD` so you know which code is actually live.
+If the backup branch or worktree already exists, inspect it rather than repeating the creation command. After the draft PR is merged, update the new worktree or create a clean one from the merged `main`; do not pull into the diverged old `main` without deciding what to do with its local CSS commit.
 
 First run a second process without interrupting the existing app:
 
@@ -30,17 +42,7 @@ curl -i http://127.0.0.1:3001/api/health
 
 It should return HTTP 200 and `"status":"ok"`. If it does not, inspect `pm2 logs linklocker-2 --lines 50` and fix the database or environment before continuing. PM2 processes must start from the directory containing your production `.env`.
 
-`MILESTONE C/ecosystem.config.js` shows both expected process names and ports. Once app 2 works, find the existing app 1 name in `pm2 ls`. Stop **only that old app** to free port 3000, then start both with the ecosystem file from the repo root:
-
-```bash
-pm2 delete EXISTING_APP_NAME
-pm2 start 'MILESTONE C/ecosystem.config.js'
-pm2 save
-curl -i http://127.0.0.1:3000/api/health
-curl -i http://127.0.0.1:3001/api/health
-```
-
-If the old process is already named `linklocker-2`, choose another temporary name for the first command and remove it after both permanent processes work. If PM2 says a process already exists, inspect `pm2 ls` and use `pm2 restart 'MILESTONE C/ecosystem.config.js' --update-env` after resolving name conflicts. Do not blindly delete all PM2 apps.
+`MILESTONE C/ecosystem.config.js` shows both expected process names and ports. Leave the old `linklocker` process on port 3000 until HAProxy and Nginx are working. HAProxy can temporarily send traffic to the old app on 3000 and the new app on 3001. After the proxy is live, replace the old process as described in Step 2.
 
 ## 2. Put HAProxy between Nginx and Express
 
@@ -67,6 +69,19 @@ curl -i https://linklocker.northcentralus.cloudapp.azure.com/api/health
 ```
 
 If `nginx -t` fails, restore your backup and recheck before reloading. For a failure after reload, restore the backed-up file and reload Nginx. Do not expose ports 3000, 3001, or 8080 in Azure NSG or the VM firewall.
+
+Now replace the old port-3000 worker with a new one from `~/linklocker-milestone-c`. The healthy port-3001 worker continues serving through HAProxy during this change. There may be a few failed requests until HAProxy's health checks mark the stopped worker down, so perform it when traffic is low:
+
+```bash
+cd ~/linklocker-milestone-c
+pm2 delete linklocker
+PORT=3000 pm2 start src/app.js --name linklocker-1
+curl -i http://127.0.0.1:3000/api/health
+curl -i http://127.0.0.1:3001/api/health
+pm2 save
+```
+
+If the new app 1 does not start, use `cd ~/Web-adminProject && pm2 start npm --name linklocker -- start` to restore the old process, then inspect its logs. Do not delete every PM2 app. Once both new workers are healthy, future coordinated restarts can use the ecosystem file.
 
 ### Prove that balancing works
 
