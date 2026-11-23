@@ -8,7 +8,7 @@ https://linklocker.northcentralus.cloudapp.azure.com/
 - **[Milestone A COMPLETED](MILESTONE%20A/README.md)**
 - **[Milestone B COMPLETED](MILESTONE%20B/writeup.md)**
 ---
-- **[Milestone C not reached yet](MILESTONE%20C/writeup.md)**
+- **[Milestone C deployment guide (in progress)](MILESTONE%20C/DEPLOYMENT.md)** — [HAProxy config](MILESTONE%20C/haproxy.cfg), [Nginx config](MILESTONE%20C/nginx.conf), [write-up to complete after live verification](MILESTONE%20C/writeup.md)
 
 
 
