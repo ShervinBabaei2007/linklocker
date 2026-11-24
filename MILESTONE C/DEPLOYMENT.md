@@ -110,26 +110,27 @@ In the browser DevTools Network tab, reload the live page and check that CSS and
 
 ### Hosted collector: Papertrail (one-VM teams)
 
-Papertrail is a hosted option explicitly allowed by the assignment. It offers a time-limited trial; confirm the current terms before signing up. In Papertrail, create a **Port-based Log Destination** that accepts **TLS** and copy its `logsN.papertrailapp.com:PORT` address. This is a destination identifier, not a password. The VM already has PM2 log files; `rsyslog` will tail both workers' output and error logs and forward only those messages to Papertrail over encrypted TCP.
+Papertrail is a hosted option explicitly allowed by the assignment. In the new SolarWinds Papertrail portal, create a destination (for example, `linklocker-pm2`), choose **Usage Instructions → Syslog → Linux (Debian/Ubuntu) → Manual**, and find its ingestion token. Treat this token as a secret. The VM already has PM2 log files; `rsyslog` will tail both workers' output and error logs and forward only those messages to the `na-01` collector over TLS on TCP 6514. This sample assumes the account URL is `my.na-01.cloud.solarwinds.com`. If your account is in another region, change the collector host accordingly.
 
-On the app VM, check the files, install the TLS driver, and download Papertrail's certificate bundle from its official site:
+On the app VM, check the files and install rsyslog's TLS driver and the system CA bundle:
 
 ```bash
 ls /home/azureuser/.pm2/logs/linklocker-*-*.log
-sudo apt install -y rsyslog-gnutls
-sudo curl -fsSLo /etc/papertrail-bundle.pem https://papertrailapp.com/tools/papertrail-bundle.pem
+sudo apt install -y ca-certificates rsyslog rsyslog-gnutls
 ```
 
-Copy `MILESTONE C/rsyslog-papertrail.conf.example` to `/etc/rsyslog.d/30-linklocker-papertrail.conf`, replacing **both** placeholders with the host and port Papertrail gives you. Keep the actual destination on the VM; the repository file remains an example. Check syntax and restart rsyslog only if the check succeeds:
+Copy `MILESTONE C/rsyslog-papertrail.conf.example` to `/etc/rsyslog.d/30-linklocker-papertrail.conf`. Use `sudoedit` to replace `REPLACE_WITH_NEW_INGESTION_TOKEN` with the destination's current token without pasting it in chat or a terminal command. The screenshot of the Easy setup exposed the original token, so rotate/recreate that token before using it. Limit the installed file to root (`sudo chmod 600 /etc/rsyslog.d/30-linklocker-papertrail.conf`). Keep the real token off GitHub. Check syntax and restart rsyslog only if the check succeeds:
 
 ```bash
 sudo rsyslogd -N1
 sudo systemctl restart rsyslog
+logger -p local0.info -t linklocker-1 'LinkLocker collector test from worker 1'
+logger -p local0.info -t linklocker-2 'LinkLocker collector test from worker 2'
 pm2 restart linklocker-1
 pm2 restart linklocker-2
 ```
 
-In Papertrail's live event search, find new startup entries tagged `linklocker-1` and `linklocker-2`. They should each show a `http://127.0.0.1:PORT` line. If one is missing, check the associated PM2 log path, `journalctl -u rsyslog --since '10 minutes ago'`, and the destination host/port. Capture evidence of both tags in one collector view. Do not include OAuth secrets or production `.env` in screenshots.
+In Papertrail's **Logs** view, find both collector test lines and new startup entries tagged `linklocker-1` and `linklocker-2`. The test messages check forwarding; the startup messages also check the PM2 file collection. If one is missing, check the associated PM2 log path, `journalctl -u rsyslog --since '10 minutes ago'`, and outbound TCP 6514. Capture evidence of both tags in one collector view. Do not include tokens, OAuth secrets, or production `.env` in screenshots.
 
 ### Separate private collector VM (alternative)
 
