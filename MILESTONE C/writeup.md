@@ -1,57 +1,39 @@
-# Milestone C — team write-up checklist
+# Milestone C — load balancing, redundancy, CDN, logging, and analytics
 
-**Team: rewrite the explanations below in your own words before submission.**
-Keep screenshots that show actual data, and be ready to explain each config line.
+**Team draft for review:** This records what we deployed and tested. Read it in your own words before submission and make sure each teammate can explain the configuration.
 
-## Live site and topology
+**Live site:** https://linklocker.northcentralus.cloudapp.azure.com/
 
-- Live URL: https://linklocker.northcentralus.cloudapp.azure.com/
-- Request path: browser → Nginx with TLS → HAProxy on `127.0.0.1:8080` → one of two Express/PM2 processes (`127.0.0.1:3000` or `:3001`) → shared MongoDB.
-- CSS and JS load from jsDelivr URLs pinned to a GitHub commit. The browser sends GA4 pageviews to Google. Each PM2 worker's output and error files go through rsyslog to Papertrail.
-- Explain why 3000/3001/8080/8404 bind only to loopback and why port 443 is public.
+**Architecture diagram:** [README](../README.md#architecture)
 
-## Load balancing and failure test
+**Annotated configuration:** [HAProxy](haproxy.cfg), [Nginx](nginx.conf), [Papertrail forwarder example](rsyslog-papertrail.conf.example)
 
-- [Annotated HAProxy configuration](haproxy.cfg): explain `frontend`, `backend`, `balance roundrobin`, `option httpchk`, `fall 2`, and `rise 2` in your own words.
-- Evidence observed on Nov 23: both `app1` and `app2` showed `UP` and received requests in the local HAProxy stats counters. During a test, `linklocker-2` was stopped, `app2` showed `DOWN`, and public `/api/health` still returned HTTP 200 via `app1`. The worker was restarted and both returned `UP`.
-- After deployment, Google sign-in, creating a short link, staying signed in across repeated page refreshes, and following the resulting redirect were tested successfully through the public HTTPS URL. Explain how the shared MongoDB session store lets either worker recognize the login.
-- Add your screenshot or short command output proving both counters and the failover test: **TODO**.
-- Explain what changes for a user when only one worker remains.
+## Load balancing and the failure test
 
-## Redundancy / single points of failure
+A browser connects to Nginx over HTTPS. Nginx forwards to HAProxy on `127.0.0.1:8080`, and HAProxy chooses one of two Express processes managed by PM2 on `127.0.0.1:3000` and `:3001`. These internal ports are not exposed publicly. Both processes use the same MongoDB database and session store, so a signed-in user can be served by either process.
 
-**Team draft based on the VM-failure discussion; read this aloud and edit it into your own words.**
+In [`haproxy.cfg`](haproxy.cfg), `frontend linklocker_front` receives Nginx's local requests. `backend linklocker_apps` uses `balance roundrobin`, which alternates requests between `app1` and `app2`. The `GET /api/health` check requires HTTP 200. After two failed checks (`fall 2`), HAProxy stops choosing an unhealthy process; after two successful checks (`rise 2`), it can use that process again. The stats listener on `127.0.0.1:8404` stays local to the VM.
 
-If our current Azure VM goes down, nobody can reach LinkLocker. Nginx, HAProxy,
-and both PM2 workers all run on that one machine, so having two workers only
-helps if one *process* fails. DNS can still point at the VM, but it has no
-running service to answer visitors.
+We saw both backend rows `UP` and their request counters increasing. We stopped `linklocker-2`, waited for HAProxy to mark `app2` `DOWN`, and confirmed the public `/api/health` still returned HTTP 200 through `app1`. We restarted the worker and both returned `UP`. We also signed in with Google, created and followed a short link, and stayed signed in after refreshing the live site. That checks the normal app flow through the load balancer, not just the health route.
 
-To remove this single-machine failure point, we would deploy another Azure VM
-with its own Nginx, HAProxy, and Express workers. An Azure Standard Load
-Balancer would be the public entry point and probe `/api/health` over HTTPS on
-both VMs. It would send new requests to the healthy VM if the other failed.
-Both VMs would use the same application version and a shared, available
-MongoDB session store, and both would need valid TLS certificates. We chose the
-assignment's documented-design option because a second VM and front load
-balancer take additional setup and Azure resources. The shared database and
-other external services still need their own availability plans.
+## Remaining single point of failure and proposed redundancy
 
-Explain this design and its remaining limitations in your own words during the
-presentation. Papertrail is outside the VM, but it is not on the request path.
+If our Azure VM goes down, LinkLocker cannot be reached. Nginx, HAProxy, and both PM2 workers all run on that one machine, so the second worker helps when a process fails but cannot help when the whole VM fails. DNS may still point to its address, but there is no running service there to answer visitors.
 
-## CDN, logging, and analytics evidence
+We would remove that single-machine failure point with a second Azure VM running its own Nginx, HAProxy, and Express workers. A public Azure Standard Load Balancer would forward TCP 443 to the two Nginx servers and use an HTTPS health probe on `/api/health`. When one VM becomes unhealthy, new requests would go to the other. Both VMs would need the same app version, valid TLS certificates, and access to a shared MongoDB session store. The database and other external services would need their own availability plan. We chose the assignment's documented-design option because deploying and maintaining another VM and front load balancer takes extra Azure resources and setup time.
 
-| Requirement | Observed verification | Evidence to attach |
-| --- | --- | --- |
-| CDN | Live HTML points to pinned jsDelivr CSS and JS; both returned HTTP 200. | The pinned URLs in [`public/index.html`](../public/index.html) and the `curl` checks in the [deployment guide](DEPLOYMENT.md). Optional Network-tab screenshot: **TODO** |
-| Central logs | Papertrail showed `linklocker-1` with `http://127.0.0.1:3000` and `linklocker-2` with `http://127.0.0.1:3001` in the same Logs view. | [Papertrail screenshot](milestonec-papertrail.png) |
-| GA4 | The live page included the tag for `G-193L2XV8Q0`. Realtime for the LinkLocker property showed 2 active users in the last 30 minutes, 2 LinkLocker views, and 2 `page_view` events. | [GA4 Realtime screenshot](milestonec-ga4.png) |
+## CDN, centralized logs, and GA4
 
-## Troubleshooting and contributions
+The live HTML points to pinned [jsDelivr CSS and JS URLs](../public/index.html) for files from our public GitHub repository. Both assets returned HTTP 200 through the CDN. We pinned them to a commit so a later change to the branch cannot unexpectedly change the assets visitors receive. HTML, login, and API requests still go to our Nginx server.
 
-- What happened: production `main` had a local commit and diverged from GitHub, so deployment used a separate worktree and backed up the old checkout. The old process was replaced only after HAProxy and Nginx worked.
-- What happened: rsyslog could forward `logger` test messages, but PM2 file entries did not appear until the `syslog` user could traverse `/home/azureuser` and the AppArmor profile allowed read access to the PM2 paths. Explain the difference between Unix file permissions and AppArmor.
-- Name which teammate set up HAProxy, logging, GA4, screenshots, docs, and testing: **TODO**.
+PM2 writes separate output and error files for each Express process. `rsyslog` reads those four files and forwards LinkLocker entries over TLS to the hosted Papertrail collector. The [Papertrail screenshot](milestonec-papertrail.png) shows real startup messages from `linklocker-1` on port 3000 and `linklocker-2` on port 3001 in the same view. This is a single place to inspect both processes' logs even if the app VM is unavailable later.
 
-See the [deployment guide](DEPLOYMENT.md) for commands and verification steps. Do not commit `.env`, ingestion tokens, OAuth secrets, or screenshots showing them.
+The live page includes the GA4 tag for Measurement ID `G-193L2XV8Q0`. After opening LinkLocker in Chrome, [GA4 Realtime](milestonec-ga4.png) showed two active users in the last 30 minutes, two LinkLocker views, and two `page_view` events. The screenshot records received data rather than only the presence of a script tag.
+
+## What we had to fix
+
+The old live checkout had a local commit and had diverged from GitHub, so we preserved it and deployed the Milestone C branch in a separate worktree. We backed up the active proxy configuration before switching Nginx to HAProxy.
+
+Our first Papertrail test messages arrived, but real PM2 entries did not. The `syslog` user could not traverse `/home/azureuser`; after fixing that file permission, Ubuntu's AppArmor profile still denied `rsyslogd` access to the PM2 directory. We added narrow read rules for those paths, restarted rsyslog, and then saw both workers' real startup messages. The [deployment guide](DEPLOYMENT.md) records the checks and commands.
+
+Team contributions are listed in the [README](../README.md#team-contributions). The deployed redundancy is at the **process** level; the two-VM design above is documented and has not been deployed.
