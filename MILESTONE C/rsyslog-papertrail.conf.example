@@ -1,24 +1,18 @@
-# Copy to /etc/rsyslog.d/30-linklocker-papertrail.conf on the app VM.
-# Edit the placeholder with the destination's ingestion token using sudoedit.
-# Keep the installed file root-only (mode 600); never commit the real token.
-# This uses SolarWinds Papertrail's na-01 syslog collector, TLS on TCP 6514.
+# use the system certificates to check papertrail's tls connection.
 global(DefaultNetstreamDriverCAFile="/etc/ssl/certs/ca-certificates.crt")
 module(load="imfile")
 
-# PM2 writes one output and one error log for each worker. imfile tails each
-# file and gives it a different syslog tag, so we can identify the worker.
+# read output and errors from each pm2 worker.
 input(type="imfile" File="/home/azureuser/.pm2/logs/linklocker-1-out.log" Tag="linklocker-1:" Facility="local0" PersistStateInterval="100")
 input(type="imfile" File="/home/azureuser/.pm2/logs/linklocker-1-error.log" Tag="linklocker-1-error:" Facility="local0" Severity="error" PersistStateInterval="100")
 input(type="imfile" File="/home/azureuser/.pm2/logs/linklocker-2-out.log" Tag="linklocker-2:" Facility="local0" PersistStateInterval="100")
 input(type="imfile" File="/home/azureuser/.pm2/logs/linklocker-2-error.log" Tag="linklocker-2-error:" Facility="local0" Severity="error" PersistStateInterval="100")
 
-# RFC 5424 structured data authenticates each message to this destination.
-# The token is private. It is distinct from the public GA4 Measurement ID.
+# replace the token placeholder on the vm; keep the real token off github.
 template(name="LinkLockerSWOFormat" type="string"
   string="<%pri%>1 %timestamp:::date-rfc3339% %HOSTNAME% %programname% - - [solarwinds@41058 token=\"REPLACE_WITH_NEW_INGESTION_TOKEN\"] %msg%")
 
-# Forward only LinkLocker logs to the collector using TLS. The queue retries
-# when the remote service or network is briefly unavailable.
+# send only linklocker logs to papertrail and retry if the connection drops.
 if ($programname startswith "linklocker-") then {
     action(type="omfwd"
            target="syslog.collector.na-01.cloud.solarwinds.com"
