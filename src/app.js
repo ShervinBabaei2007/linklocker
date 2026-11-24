@@ -4,6 +4,7 @@ require("dotenv").config();
 // and guard the create-link endpoint against abuse.
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const crypto = require("crypto");
 const mongoose = require("mongoose");
 const { rateLimit } = require("express-rate-limit");
@@ -30,6 +31,30 @@ const linkCreationLimiter = rateLimit({
 // so oversized payloads are rejected before they hit the database layer.
 app.use("/api/links", linkCreationLimiter);
 app.use(express.json({ limit: "20kb" }));
+
+// Render the home page with the public GA4 measurement ID, when configured.
+// The ID identifies an analytics property; it is not an OAuth credential.
+app.get("/", (req, res, next) => {
+  const id = process.env.GA_MEASUREMENT_ID;
+  if (id && !/^G-[A-Z0-9]+$/.test(id)) {
+    return next(new Error("GA_MEASUREMENT_ID must look like G-XXXXXXXXXX."));
+  }
+
+  const indexPath = path.join(__dirname, "../public/index.html");
+  fs.readFile(indexPath, "utf8", (error, html) => {
+    if (error) return next(error);
+    const tag = id
+      ? `<script async src="https://www.googletagmanager.com/gtag/js?id=${id}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '${id}');
+    </script>`
+      : "";
+    res.type("html").send(html.replace("<!-- GA4_TAG -->", tag));
+  });
+});
 app.use(express.static(path.join(__dirname, "../public")));
 
 // Sessions, Passport, and the /auth/* + /api/me routes (Sign in with Google).
