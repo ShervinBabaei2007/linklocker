@@ -64,3 +64,15 @@ Nginx, HAProxy, and both PM2 workers currently run on the same Azure VM. The two
 - Registration of the prod OAuth callback
 - Configure the prod .env variables for Google OAuth
 - Fix frontend bugs and what it displays
+
+---
+
+### Milestone C
+
+**@sawyer100 — infrastructure and verification**
+- Set up and tested two PM2 workers behind HAProxy on the Azure VM, including health checks and a one-worker failover test.
+- Connected Nginx to HAProxy, checked jsDelivr asset delivery, configured GA4, and tested Google login and short-link creation on the live site.
+
+**@ShervinBabaei2007 — logging and documentation**
+- Set up Papertrail collection for both PM2 workers and verified their startup logs in one view.
+- Prepared the Milestone C documentation and evidence for team review.
