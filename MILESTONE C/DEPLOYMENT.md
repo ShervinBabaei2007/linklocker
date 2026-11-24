@@ -134,6 +134,29 @@ The `--x` ACL on the home directory permits traversal to known paths, not
 listing the home directory. The PM2 directory and log-file permissions still
 apply. Apply the same check to the error files if they do not appear.
 
+Ubuntu's AppArmor profile for `rsyslogd` also denied `imfile` access on this
+VM, even after the Unix read test passed. The profile includes
+`/etc/apparmor.d/local/usr.sbin.rsyslogd`. Add these local read rules there:
+
+```text
+/ r,
+/home/ r,
+/home/azureuser/ r,
+/home/azureuser/.pm2/ r,
+/home/azureuser/.pm2/logs/ r,
+/home/azureuser/.pm2/logs/linklocker-*.log r,
+```
+
+Reload the profile and restart rsyslog, then restart each PM2 worker to emit
+fresh startup lines and verify both reach Papertrail:
+
+```bash
+sudo apparmor_parser -r /etc/apparmor.d/usr.sbin.rsyslogd
+sudo systemctl restart rsyslog
+pm2 restart linklocker-1
+pm2 restart linklocker-2
+```
+
 Copy `MILESTONE C/rsyslog-papertrail.conf.example` to `/etc/rsyslog.d/30-linklocker-papertrail.conf`. Use `sudoedit` to replace `REPLACE_WITH_NEW_INGESTION_TOKEN` with the destination's current token without pasting it in chat or a terminal command. The screenshot of the Easy setup exposed the original token, so rotate/recreate that token before using it. Limit the installed file to root (`sudo chmod 600 /etc/rsyslog.d/30-linklocker-papertrail.conf`). Keep the real token off GitHub. Check syntax and restart rsyslog only if the check succeeds:
 
 ```bash
