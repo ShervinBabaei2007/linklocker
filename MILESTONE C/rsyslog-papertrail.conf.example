@@ -1,0 +1,33 @@
+# Install on the LinkLocker VM as /etc/rsyslog.d/30-linklocker-papertrail.conf
+# after replacing REPLACE_PAPERTRAIL_HOST and REPLACE_PAPERTRAIL_PORT with
+# the Port-based Log Destination shown in Papertrail. Do not commit actual
+# log contents, credentials, or the production .env.
+
+# This CA bundle verifies Papertrail's TLS certificate over the public internet.
+global(DefaultNetstreamDriverCAFile="/etc/papertrail-bundle.pem")
+module(load="imfile")
+
+# PM2 writes one output and one error log for each worker. imfile tails each
+# file and gives it a different syslog tag, so we can identify the worker.
+input(type="imfile" File="/home/azureuser/.pm2/logs/linklocker-1-out.log" Tag="linklocker-1:" Facility="local0")
+input(type="imfile" File="/home/azureuser/.pm2/logs/linklocker-1-error.log" Tag="linklocker-1-error:" Facility="local0" Severity="error")
+input(type="imfile" File="/home/azureuser/.pm2/logs/linklocker-2-out.log" Tag="linklocker-2:" Facility="local0")
+input(type="imfile" File="/home/azureuser/.pm2/logs/linklocker-2-error.log" Tag="linklocker-2-error:" Facility="local0" Severity="error")
+
+# Forward only LinkLocker logs to the collector using TLS. The disk-assisted
+# queue retries when the remote service or network is briefly unavailable.
+if ($programname startswith "linklocker-") then {
+    action(type="omfwd"
+           target="REPLACE_PAPERTRAIL_HOST"
+           port="REPLACE_PAPERTRAIL_PORT"
+           protocol="tcp"
+           StreamDriver="gtls"
+           StreamDriverMode="1"
+           StreamDriverAuthMode="x509/name"
+           StreamDriverPermittedPeers="*.papertrailapp.com"
+           action.resumeRetryCount="-1"
+           queue.type="linkedList"
+           queue.filename="linklocker-papertrail"
+           queue.saveOnShutdown="on")
+    stop
+}
