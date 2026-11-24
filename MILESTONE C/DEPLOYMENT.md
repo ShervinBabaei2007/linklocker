@@ -1,6 +1,6 @@
 # Milestone C deployment and learning guide
 
-Use the commands below on your Azure Ubuntu VM unless a step says **collector VM** or **browser**. This guide is a runbook; write the assessed `writeup.md` in your own words after doing the work. The live site is `https://linklocker.northcentralus.cloudapp.azure.com/`.
+Use the commands below on your Azure Ubuntu VM unless a step says **collector VM** or **browser**. This is the deployment runbook; the [Milestone C write-up](writeup.md) records the tested result. The live site is `https://linklocker.northcentralus.cloudapp.azure.com/`.
 
 ## 0. Trace one request before changing anything
 
@@ -215,8 +215,8 @@ In Google Analytics, create or select a GA4 web data stream for the live site, a
 
 Visit the live home page with analytics not blocked in your browser. In DevTools Network, look for the `gtag/js` script and a GA collection request. In GA4 **Reports → Realtime**, look for your visit and capture a screenshot that shows live data. GA4 reporting can lag, so don't submit a screenshot that only shows the tag in source; the assignment explicitly requests a screenshot with live data. Keep the Measurement ID in `.env.example` as a placeholder, but never put the Google OAuth client secret in screenshots or the repo.
 
-## 6. Write the assessment in your own words
+## 6. Review the assessment and evidence
 
-Fill `MILESTONE C/writeup.md` with what actually happened. Include the architecture and actual setup; explain `frontend`, `backend`, `balance roundrobin`, the health check, and what happens if one app process fails. Describe the remaining single points of failure: the sole Azure VM, Nginx, HAProxy, and any external data/logging dependency. For the permitted design-only redundancy path, describe a second VM with a second Nginx/HAProxy pair and independent workers, plus a managed entry load balancer with health checks. Explain how traffic would move when one VM fails, and why you chose documentation rather than implementing this extra infrastructure. Note that two processes on one VM do **not** survive loss of that VM.
+Review `MILESTONE C/writeup.md` together and be ready to explain `frontend`, `backend`, `balance roundrobin`, the health check, and what happens if one app process fails. Discuss the remaining single points of failure and the documented second-VM design. Two processes on one VM do **not** survive loss of that VM.
 
-Add evidence: live URL; link to the annotated HAProxy config; a short SPOF analysis; GA4 Realtime screenshot; and screenshots or command output showing both PM2 workers, the HAProxy health/failover check, CDN Network requests, and both log tags at the collector. Update the main README's architecture diagram and your team's actual contributions. The assignment permits AI help with configs and debugging but requires that your milestone write-up be in your own words and each team member can explain the configuration.
+The write-up links the live URL, annotated HAProxy config, SPOF analysis, GA4 Realtime screenshot, and Papertrail screenshot. The README contains the current architecture diagram and the team contributions. The assignment permits AI help with configs and debugging but requires that the team understand and explain its deployment.
