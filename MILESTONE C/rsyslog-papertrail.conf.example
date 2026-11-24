@@ -29,7 +29,7 @@ if ($programname startswith "linklocker-") then {
            StreamDriver="gtls"
            StreamDriverMode="1"
            StreamDriverAuthMode="x509/name"
-           StreamDriverPermittedPeers="syslog.collector.na-01.cloud.solarwinds.com"
+           StreamDriverPermittedPeers="*.collector.na-01.cloud.solarwinds.com"
            action.resumeRetryCount="-1"
            queue.type="linkedList"
            queue.filename="linklocker-papertrail"
