@@ -112,16 +112,45 @@ In the browser DevTools Network tab, reload the live page and check that CSS and
 
 Papertrail is a hosted option explicitly allowed by the assignment. In the new SolarWinds Papertrail portal, create a destination (for example, `linklocker-pm2`), choose **Usage Instructions → Syslog → Linux (Debian/Ubuntu) → Manual**, and find its ingestion token. Treat this token as a secret. The VM already has PM2 log files; `rsyslog` will tail both workers' output and error logs and forward only those messages to the `na-01` collector over TLS on TCP 6514. This sample assumes the account URL is `my.na-01.cloud.solarwinds.com`. If your account is in another region, change the collector host accordingly.
 
-On the app VM, check the files and install rsyslog's TLS driver and the system CA bundle:
+On the app VM, check the four PM2 files and install rsyslog with TLS support:
 
 ```bash
 ls /home/azureuser/.pm2/logs/linklocker-*-*.log
 sudo apt install -y ca-certificates rsyslog rsyslog-gnutls
 ```
 
-On this VM `/home/azureuser` has mode `750`; rsyslog runs as `syslog` and
-cannot traverse the home directory to read PM2 logs even when the log files
-themselves are world-readable. Grant only directory traversal for this user:
+Copy `MILESTONE C/rsyslog-papertrail.conf.example` to
+`/etc/rsyslog.d/30-linklocker-papertrail.conf`. Replace
+`REPLACE_WITH_NEW_INGESTION_TOKEN` with the destination token using an editor
+on the VM; keep the actual token out of GitHub. This config authenticates each
+message, checks the collector's TLS certificate, and reads only the four
+LinkLocker PM2 files. Limit the installed config to root:
+
+```bash
+sudo cp 'MILESTONE C/rsyslog-papertrail.conf.example' /etc/rsyslog.d/30-linklocker-papertrail.conf
+sudo chmod 600 /etc/rsyslog.d/30-linklocker-papertrail.conf
+sudoedit /etc/rsyslog.d/30-linklocker-papertrail.conf
+sudo rsyslogd -N1
+sudo systemctl restart rsyslog
+```
+
+First verify the remote connection without depending on the PM2 files:
+
+```bash
+logger -p local0.info -t linklocker-1 'LinkLocker collector test from worker 1'
+logger -p local0.info -t linklocker-2 'LinkLocker collector test from worker 2'
+```
+
+Both test lines should appear in Papertrail **Logs**. Then restart the two
+workers one at a time and look for the real `http://127.0.0.1:3000` and
+`:3001` startup lines in the same view. A `logger` test alone does not prove
+that rsyslog can read the PM2 files.
+
+### Troubleshooting PM2 file access on this VM
+
+On this VM `/home/azureuser` had mode `750`; the `syslog` user could not
+traverse it even though the PM2 log files were readable. Grant only directory
+traversal to that user and verify both output files:
 
 ```bash
 sudo apt install -y acl
@@ -130,13 +159,9 @@ sudo -u syslog test -r /home/azureuser/.pm2/logs/linklocker-1-out.log && echo 'w
 sudo -u syslog test -r /home/azureuser/.pm2/logs/linklocker-2-out.log && echo 'worker 2 readable'
 ```
 
-The `--x` ACL on the home directory permits traversal to known paths, not
-listing the home directory. The PM2 directory and log-file permissions still
-apply. Apply the same check to the error files if they do not appear.
-
-Ubuntu's AppArmor profile for `rsyslogd` also denied `imfile` access on this
-VM, even after the Unix read test passed. The profile includes
-`/etc/apparmor.d/local/usr.sbin.rsyslogd`. Add these local read rules there:
+Ubuntu's AppArmor profile for `rsyslogd` also denied access. The profile
+includes `/etc/apparmor.d/local/usr.sbin.rsyslogd`; add these local rules
+**once** to allow only the required directories and LinkLocker log files:
 
 ```text
 / r,
@@ -147,8 +172,7 @@ VM, even after the Unix read test passed. The profile includes
 /home/azureuser/.pm2/logs/linklocker-*.log r,
 ```
 
-Reload the profile and restart rsyslog, then restart each PM2 worker to emit
-fresh startup lines and verify both reach Papertrail:
+Reload the profile and rsyslog, then restart each worker to make new log lines:
 
 ```bash
 sudo apparmor_parser -r /etc/apparmor.d/usr.sbin.rsyslogd
@@ -157,18 +181,10 @@ pm2 restart linklocker-1
 pm2 restart linklocker-2
 ```
 
-Copy `MILESTONE C/rsyslog-papertrail.conf.example` to `/etc/rsyslog.d/30-linklocker-papertrail.conf`. Use `sudoedit` to replace `REPLACE_WITH_NEW_INGESTION_TOKEN` with the destination's current token without pasting it in chat or a terminal command. The screenshot of the Easy setup exposed the original token, so rotate/recreate that token before using it. Limit the installed file to root (`sudo chmod 600 /etc/rsyslog.d/30-linklocker-papertrail.conf`). Keep the real token off GitHub. Check syntax and restart rsyslog only if the check succeeds:
-
-```bash
-sudo rsyslogd -N1
-sudo systemctl restart rsyslog
-logger -p local0.info -t linklocker-1 'LinkLocker collector test from worker 1'
-logger -p local0.info -t linklocker-2 'LinkLocker collector test from worker 2'
-pm2 restart linklocker-1
-pm2 restart linklocker-2
-```
-
-In Papertrail's **Logs** view, find both collector test lines and new startup entries tagged `linklocker-1` and `linklocker-2`. The test messages check forwarding; the startup messages also check the PM2 file collection. If one is missing, check the associated PM2 log path, `journalctl -u rsyslog --since '10 minutes ago'`, and outbound TCP 6514. Capture evidence of both tags in one collector view. Do not include tokens, OAuth secrets, or production `.env` in screenshots.
+The Papertrail screenshot in this repository shows both real startup lines,
+which verifies collection from both PM2 instances. If a line is missing,
+check the file path, `journalctl -u rsyslog`, and AppArmor denials in
+`journalctl -k`. Keep tokens and OAuth credentials out of screenshots.
 
 ### Separate private collector VM (alternative)
 
