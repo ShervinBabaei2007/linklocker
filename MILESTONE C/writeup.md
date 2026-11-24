@@ -1,6 +1,6 @@
 # Milestone C — load balancing, redundancy, CDN, logging, and analytics
 
-**Team draft for review:** This records what we deployed and tested. Read it in your own words before submission and make sure each teammate can explain the configuration.
+This records what we deployed and tested. Each teammate should be able to explain the configuration during the presentation.
 
 **Live site:** https://linklocker.northcentralus.cloudapp.azure.com/
 
