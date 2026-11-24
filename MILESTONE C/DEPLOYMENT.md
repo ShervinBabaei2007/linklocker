@@ -119,6 +119,21 @@ ls /home/azureuser/.pm2/logs/linklocker-*-*.log
 sudo apt install -y ca-certificates rsyslog rsyslog-gnutls
 ```
 
+On this VM `/home/azureuser` has mode `750`; rsyslog runs as `syslog` and
+cannot traverse the home directory to read PM2 logs even when the log files
+themselves are world-readable. Grant only directory traversal for this user:
+
+```bash
+sudo apt install -y acl
+sudo setfacl -m u:syslog:--x /home/azureuser
+sudo -u syslog test -r /home/azureuser/.pm2/logs/linklocker-1-out.log && echo 'worker 1 readable'
+sudo -u syslog test -r /home/azureuser/.pm2/logs/linklocker-2-out.log && echo 'worker 2 readable'
+```
+
+The `--x` ACL on the home directory permits traversal to known paths, not
+listing the home directory. The PM2 directory and log-file permissions still
+apply. Apply the same check to the error files if they do not appear.
+
 Copy `MILESTONE C/rsyslog-papertrail.conf.example` to `/etc/rsyslog.d/30-linklocker-papertrail.conf`. Use `sudoedit` to replace `REPLACE_WITH_NEW_INGESTION_TOKEN` with the destination's current token without pasting it in chat or a terminal command. The screenshot of the Easy setup exposed the original token, so rotate/recreate that token before using it. Limit the installed file to root (`sudo chmod 600 /etc/rsyslog.d/30-linklocker-papertrail.conf`). Keep the real token off GitHub. Check syntax and restart rsyslog only if the check succeeds:
 
 ```bash
