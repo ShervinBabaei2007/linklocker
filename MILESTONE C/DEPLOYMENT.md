@@ -108,6 +108,31 @@ In the browser DevTools Network tab, reload the live page and check that CSS and
 
 ## 4. Centralize both app processes' logs
 
+### Hosted collector: Papertrail (one-VM teams)
+
+Papertrail is a hosted option explicitly allowed by the assignment. It offers a time-limited trial; confirm the current terms before signing up. In Papertrail, create a **Port-based Log Destination** that accepts **TLS** and copy its `logsN.papertrailapp.com:PORT` address. This is a destination identifier, not a password. The VM already has PM2 log files; `rsyslog` will tail both workers' output and error logs and forward only those messages to Papertrail over encrypted TCP.
+
+On the app VM, check the files, install the TLS driver, and download Papertrail's certificate bundle from its official site:
+
+```bash
+ls /home/azureuser/.pm2/logs/linklocker-*-*.log
+sudo apt install -y rsyslog-gnutls
+sudo curl -fsSLo /etc/papertrail-bundle.pem https://papertrailapp.com/tools/papertrail-bundle.pem
+```
+
+Copy `MILESTONE C/rsyslog-papertrail.conf.example` to `/etc/rsyslog.d/30-linklocker-papertrail.conf`, replacing **both** placeholders with the host and port Papertrail gives you. Keep the actual destination on the VM; the repository file remains an example. Check syntax and restart rsyslog only if the check succeeds:
+
+```bash
+sudo rsyslogd -N1
+sudo systemctl restart rsyslog
+pm2 restart linklocker-1
+pm2 restart linklocker-2
+```
+
+In Papertrail's live event search, find new startup entries tagged `linklocker-1` and `linklocker-2`. They should each show a `http://127.0.0.1:PORT` line. If one is missing, check the associated PM2 log path, `journalctl -u rsyslog --since '10 minutes ago'`, and the destination host/port. Capture evidence of both tags in one collector view. Do not include OAuth secrets or production `.env` in screenshots.
+
+### Separate private collector VM (alternative)
+
 Use a **separate collector VM** on the same private Azure network, with an Azure NSG rule permitting TCP 514 **only from the app VM's private IP**. Keep TCP 514 closed to the public internet. The sample uses plain syslog over the private network; use TLS or a hosted log service for traffic across public networks. This collector is separate from the one Azure VM that currently hosts Nginx, HAProxy, and both workers.
 
 On the collector VM, copy `MILESTONE C/rsyslog-collector.conf` to `/etc/rsyslog.d/30-linklocker-collector.conf`. Check that rsyslog and the firewall are configured, then:
