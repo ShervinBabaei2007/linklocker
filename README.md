@@ -8,7 +8,7 @@ https://linklocker.northcentralus.cloudapp.azure.com/
 - **[Milestone A COMPLETED](MILESTONE%20A/README.md)**
 - **[Milestone B COMPLETED](MILESTONE%20B/writeup.md)**
 ---
-- **[Milestone C COMPLETED](MILESTONE%20C/writeup.md)** — [deployment guide](MILESTONE%20C/DEPLOYMENT.md), [annotated HAProxy config](MILESTONE%20C/haproxy.cfg), [Nginx config](MILESTONE%20C/nginx.conf), and linked GA4/Papertrail evidence.
+- **[Milestone C COMPLETED](MILESTONE%20C/writeup.md)** — configs and screenshots are linked in the write-up.
 
 
 
