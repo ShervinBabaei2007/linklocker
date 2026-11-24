@@ -29,7 +29,7 @@ Keep screenshots that show actual data, and be ready to explain each config line
 | --- | --- | --- |
 | CDN | Live HTML points to pinned jsDelivr CSS and JS; both returned HTTP 200. | Screenshot of browser Network tab for both assets: **TODO** |
 | Central logs | Papertrail showed `linklocker-1` with `http://127.0.0.1:3000` and `linklocker-2` with `http://127.0.0.1:3001` in the same Logs view. | Screenshot from Nov 23: **TODO attach or link** |
-| GA4 | Tag for `G-193L2XV8Q0` appeared in live HTML; a visit in Chrome was reported in Realtime according to the team's test. | GA4 Realtime screenshot with live pageview/event: **TODO attach or link** |
+| GA4 | The live page included the tag for `G-193L2XV8Q0`. Realtime for the LinkLocker property showed 2 active users in the last 30 minutes, 2 LinkLocker views, and 2 `page_view` events. | Realtime screenshot captured Nov 23: **TODO attach or link in repo** |
 
 ## Troubleshooting and contributions
 
