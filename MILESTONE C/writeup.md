@@ -20,9 +20,25 @@ Keep screenshots that show actual data, and be ready to explain each config line
 
 ## Redundancy / single points of failure
 
-- Current deployment has one Azure VM. Loss of the VM, Nginx, or HAProxy stops the public site despite two Express processes. Shared MongoDB and external dependencies need their own availability plan. The hosted Papertrail collector is outside this VM, but logging is not the request path.
-- **Documented design, not yet implemented:** use a second Azure VM with its own Nginx/HAProxy pair and app workers. Put a managed public entry load balancer with health checks in front of the VMs. If one VM fails, route new connections to the healthy VM. Use the same application version and shared database/session store on both VMs. Ensure the entry load balancer and database are themselves highly available. Describe the extra cost and setup time that led the team to document this design for the course's permitted option.
-- Rewrite this analysis with a simple failure scenario in your own words. State clearly that two workers on the **same** VM do not provide VM-level redundancy.
+**Team draft based on the VM-failure discussion; read this aloud and edit it into your own words.**
+
+If our current Azure VM goes down, nobody can reach LinkLocker. Nginx, HAProxy,
+and both PM2 workers all run on that one machine, so having two workers only
+helps if one *process* fails. DNS can still point at the VM, but it has no
+running service to answer visitors.
+
+To remove this single-machine failure point, we would deploy another Azure VM
+with its own Nginx, HAProxy, and Express workers. An Azure Standard Load
+Balancer would be the public entry point and probe `/api/health` over HTTPS on
+both VMs. It would send new requests to the healthy VM if the other failed.
+Both VMs would use the same application version and a shared, available
+MongoDB session store, and both would need valid TLS certificates. We chose the
+assignment's documented-design option because a second VM and front load
+balancer take additional setup and Azure resources. The shared database and
+other external services still need their own availability plans.
+
+Explain this design and its remaining limitations in your own words during the
+presentation. Papertrail is outside the VM, but it is not on the request path.
 
 ## CDN, logging, and analytics evidence
 
